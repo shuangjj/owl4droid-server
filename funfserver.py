@@ -23,6 +23,7 @@
 
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from SocketServer import ThreadingMixIn
+#TODO Setup path environment in script
 import sys
 sys.path.insert(0, '/home/shuang/workspace/funfsens/scripts-0.2.3/data_analyze')
 
@@ -33,8 +34,7 @@ import shutil
 import time
 
 import sqlite3
-from db_helper import DBHelper
-#import audio_features as af
+import db_helper
 from features import FeatureRecord
 
 server_dir = os.path.dirname(__file__)
@@ -57,10 +57,9 @@ def read_config():
 def backup_file(filepath):
     shutil.move(filepath, filepath + '.' + str(int(time.time()*1000)) + '.bak')
 
-def write_db(filename, feature_path):
-    print 'Writing to db: ' + feature_path
 
-# "/uploads/" + ["train"|"test"] + {feature} + {scenes} + {location}
+
+# "/uploads/" + ["train"|"test"] + {sensor} + {scenes} + {location}
 def write_file(filename, file, feature_path):
     feature_dir = upload_dir + feature_path
     backup_dir = feature_dir.replace("uploads", "backup", 1) + "-" + str(int(time.time()*1000)) + '.bak'
@@ -76,36 +75,52 @@ def write_file(filename, file, feature_path):
                 break
             output_file.write(chunk)
     output_file.close()
+
     #TODO: decrypt single db file
-    #? Write to sqllite database
+
+    #? Extract data time and date from uploaded db
     conn = sqlite3.connect(tempdb)
     cur = conn.cursor()
     cur.execute('SELECT * FROM data')
-    r = cur.fetchone()
-    frecord = FeatureRecord(r)
+    rc = cur.fetchall()
+    if len(rc) == 0:
+        return
+    print 'Record#: %d' % len(rc)
+    frecord = FeatureRecord(rc[0])
 
     datehour =  frecord.getDateHour()
     conn.close()
-    #? Extract data metadate from path
-    splits = feature_path.split('/')
-    #print splits
-    usage = splits[1]; feature = splits[2]; scene = splits[3]
-    #print usage, feature, scene, datehour
-    #print filename
-    dbname = usage + '_' + feature + '_' + scene + '_' + datehour + '.db'
-    #TODO: Multiple db files, merge is required
-    filepath = os.path.join(feature_dir, dbname) 
 
+    #? Extract feature metadate from feature path
+    splits = feature_path.split('/')
+    usage = splits[1]; sensor = splits[2]; scene = splits[3]
+    #print usage, feature, scene, datehour
+    dbname = usage + '_' + sensor + '_' + scene + '_' + datehour + '.db'
+    location = 'bainbridge'
+
+    #TODO: Multiple db files, merge is required
+
+    filepath = os.path.join(feature_dir, dbname) 
     #? Backup if exists
     if os.path.isfile(filepath): # Backup data
         os.makedirs(backup_dir)
         shutil.move(filepath, backup_dir)
         print 'File %s has been backup to %s' % (filepath, backup_dir)
-    # Create new data directory
+
     if not os.path.exists(feature_dir):
         os.makedirs(feature_dir)
-    # Rename temp db file
+
+    # Rename temp db to customized format
     shutil.move(tempdb, filepath)
+
+    #? Write to DB
+    sql_query = "SELECT * FROM %s WHERE dbpath LIKE ?" % (constants.FUNFTBL)
+    db = db_helper.DBHelper(constants.FUNFDB, '.')
+    affected = len(db.query_db(sql_query, (filepath, )))
+    if affected <= 0:
+        insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?,?)" % (constants.FUNFTBL)
+        db.write_db(insert_sql, (usage, sensor, scene, location, datehour, filepath))
+
 
 class RequestHandler(BaseHTTPRequestHandler):
     
@@ -174,6 +189,14 @@ if __name__ == '__main__':
     sa = httpd.socket.getsockname()
     print "Serving HTTP on", sa[0], "port", sa[1], "..."
     print 'use <Ctrl-C> to stop'
+    if not os.path.exists(os.path.join('.', db_helper.FUNFDB)):
+        create_sql = '''CREATE TABLE %s
+                    ( usage text, sensor text, scene text, location text,
+                      timehour text, dbpath text)''' % constants.FUNFTBL
+
+        db = db_helper.DBHelper(constants.FUNFDB, '.')
+        db.create_db(create_sql)
+ 
     httpd.serve_forever()
 
 
