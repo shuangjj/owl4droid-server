@@ -34,8 +34,11 @@ import shutil
 import time
 
 import sqlite3
+import urllib
+import constants
 import db_helper
 from features import FeatureRecord
+
 
 server_dir = os.path.dirname(__file__)
 
@@ -61,13 +64,21 @@ def backup_file(filepath):
 
 # "/uploads/" + ["train"|"test"] + {sensor} + {scenes} + {location}
 def write_file(filename, file, feature_path):
+    loc_idx = feature_path.rfind('/')
+    location = urllib.unquote(feature_path[loc_idx+1:])
+    print location
+    feature_path = feature_path[:loc_idx]
+    #print feature_path
     feature_dir = upload_dir + feature_path
     backup_dir = feature_dir.replace("uploads", "backup", 1) + "-" + str(int(time.time()*1000)) + '.bak'
     
     #? Write to temporary db file
     tempdb = os.path.join(feature_dir, 'temp.db')
-    if os.path.exists(tempdb):
+    if os.path.isfile(tempdb):
         os.remove(tempdb)
+    if not os.path.exists(feature_dir):
+        os.makedirs(feature_dir)
+
     with open(tempdb, 'wb') as output_file:
         while True:
             chunk = file.read(1024)
@@ -83,11 +94,12 @@ def write_file(filename, file, feature_path):
     cur = conn.cursor()
     cur.execute('SELECT * FROM data')
     rc = cur.fetchall()
-    if len(rc) == 0:
+    rec_num = len(rc)
+    print "Record#: " + str(rec_num)
+    if rec_num == 0:
         return
-    print 'Record#: %d' % len(rc)
+    #
     frecord = FeatureRecord(rc[0])
-
     datehour =  frecord.getDateHour()
     conn.close()
 
@@ -95,8 +107,8 @@ def write_file(filename, file, feature_path):
     splits = feature_path.split('/')
     usage = splits[1]; sensor = splits[2]; scene = splits[3]
     #print usage, feature, scene, datehour
-    dbname = usage + '_' + sensor + '_' + scene + '_' + datehour + '.db'
-    location = 'bainbridge'
+    dbname = usage + '_' + sensor + '_' + scene + '_' + location + '_' + datehour + '.db'
+    #location = 'bainbridge'
 
     #TODO: Multiple db files, merge is required
 
@@ -118,8 +130,8 @@ def write_file(filename, file, feature_path):
     db = db_helper.DBHelper(constants.FUNFDB, '.')
     affected = len(db.query_db(sql_query, (filepath, )))
     if affected <= 0:
-        insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?,?)" % (constants.FUNFTBL)
-        db.write_db(insert_sql, (usage, sensor, scene, location, datehour, filepath))
+        insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
+        db.write_db(insert_sql, (usage, sensor, scene, location, datehour, filepath, rec_num))
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -191,8 +203,13 @@ if __name__ == '__main__':
     print 'use <Ctrl-C> to stop'
     if not os.path.exists(os.path.join('.', db_helper.FUNFDB)):
         create_sql = '''CREATE TABLE %s
-                    ( usage text, sensor text, scene text, location text,
-                      timehour text, dbpath text)''' % constants.FUNFTBL
+                    ( usage TEXT, 
+                      sensor TEXT, 
+                      scene TEXT, 
+                      location TEXT,
+                      timehour TEXT,
+                      dbpath TEXT,
+                      rec_num INT)''' % constants.FUNFTBL
 
         db = db_helper.DBHelper(constants.FUNFDB, '.')
         db.create_db(create_sql)
