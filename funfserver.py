@@ -68,10 +68,10 @@ def write_file(filename, file, feature_path):
     location = urllib.unquote(feature_path[loc_idx+1:])
     print location
     feature_path = feature_path[:loc_idx]
-    #print feature_path
     feature_dir = upload_dir + feature_path
     backup_dir = feature_dir.replace("uploads", "backup", 1) + "-" + str(int(time.time()*1000)) + '.bak'
     
+    #print feature_dir
     #? Write to temporary db file
     tempdb = os.path.join(feature_dir, 'temp.db')
     if os.path.isfile(tempdb):
@@ -100,14 +100,16 @@ def write_file(filename, file, feature_path):
         return
     #
     frecord = FeatureRecord(rc[0])
-    datehour =  frecord.getDateHour()
+    fdate =  frecord.getDate()
+    ftime = frecord.getTime()
+    fhour = frecord.getHour()
     conn.close()
 
     #? Extract feature metadate from feature path
     splits = feature_path.split('/')
     usage = splits[1]; sensor = splits[2]; scene = splits[3]
     #print usage, feature, scene, datehour
-    dbname = usage + '_' + sensor + '_' + scene + '_' + location + '_' + datehour + '.db'
+    dbname = usage + '_' + sensor + '_' + scene + '_' + location + '_' + fdate + '-' + fhour + '.db'
     #location = 'bainbridge'
 
     #TODO: Multiple db files, merge is required
@@ -126,12 +128,21 @@ def write_file(filename, file, feature_path):
     shutil.move(tempdb, filepath)
 
     #? Write to DB
-    sql_query = "SELECT * FROM %s WHERE dbpath LIKE ?" % (constants.FUNFTBL)
+    '''
+    sql_query = "SELECT * FROM %s WHERE dbpath LIKE ? COLLATE NOCASE" % (constants.FUNFTBL)
     db = db_helper.DBHelper(constants.FUNFDB, '.')
     affected = len(db.query_db(sql_query, (filepath, )))
     if affected <= 0:
         insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
         db.write_db(insert_sql, (usage, sensor, scene, location, datehour, filepath, rec_num))
+    '''
+    del_sql = "DELETE FROM %s WHERE dbpath LIKE ? COLLATE NOCASE" % (constants.FUNFTBL)
+    db = db_helper.DBHelper(constants.FUNFDB, '.')
+    db.execute_db(del_sql, (filepath,))
+
+    insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
+    print "Writing record for " + filepath
+    db.execute_db(insert_sql, (usage, scene, sensor, location, fdate, ftime, filepath, rec_num))
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -154,6 +165,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed_url = urlparse.urlparse(self.path)
         path = parsed_url.path
+        #print path
         ctype, pdict = cgi.parse_header(self.headers['Content-Type']) 
         path_comp = path.split('/')     # "/data/" + ["train"|"test"] + {feature} + {scenes} + {location}
         root_path = path_comp[1]
@@ -201,18 +213,20 @@ if __name__ == '__main__':
     sa = httpd.socket.getsockname()
     print "Serving HTTP on", sa[0], "port", sa[1], "..."
     print 'use <Ctrl-C> to stop'
-    if not os.path.exists(os.path.join('.', db_helper.FUNFDB)):
+    if not os.path.exists(os.path.join('.', constants.FUNFDB)):
         create_sql = '''CREATE TABLE %s
                     ( usage TEXT, 
+                      scene TEXT,
                       sensor TEXT, 
-                      scene TEXT, 
                       location TEXT,
-                      timehour TEXT,
+                      date DATE,
+                      time TIME,
                       dbpath TEXT,
                       rec_num INT)''' % constants.FUNFTBL
 
         db = db_helper.DBHelper(constants.FUNFDB, '.')
-        db.create_db(create_sql)
+        db.execute_db(create_sql, ())
+        print constants.FUNFDB +  ' is created'
  
     httpd.serve_forever()
 
