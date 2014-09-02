@@ -133,14 +133,15 @@ def write_file(filename, file, feature_path):
     db = db_helper.DBHelper(constants.FUNFDB, '.')
     affected = len(db.query_db(sql_query, (filepath, )))
     if affected <= 0:
-        insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
+        insert_sql = "INSERT INTO %s  VALUES(?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
         db.write_db(insert_sql, (usage, sensor, scene, location, datehour, filepath, rec_num))
     '''
     del_sql = "DELETE FROM %s WHERE dbpath LIKE ? COLLATE NOCASE" % (constants.FUNFTBL)
     db = db_helper.DBHelper(constants.FUNFDB, '.')
     db.execute_db(del_sql, (filepath,))
 
-    insert_sql = "INSERT INTO %s VALUES(?, ?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
+    insert_sql = "INSERT INTO %s (usage, scene, sensor, location, date, time, dbpath, rec_num) \
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?)" % (constants.FUNFTBL)
     print "Writing record for " + filepath
     db.execute_db(insert_sql, (usage, scene, sensor, location, fdate, ftime, filepath, rec_num))
 
@@ -215,14 +216,15 @@ if __name__ == '__main__':
     print 'use <Ctrl-C> to stop'
     if not os.path.exists(os.path.join('.', constants.FUNFDB)):
         create_sql = '''CREATE TABLE %s
-                    ( usage TEXT, 
+                    ( id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                      usage TEXT, 
                       scene TEXT,
                       sensor TEXT, 
                       location TEXT,
                       date DATE,
                       time TIME,
                       dbpath TEXT,
-                      rec_num INT)''' % constants.FUNFTBL
+                      rec_num INTEGER)''' % constants.FUNFTBL
 
         db = db_helper.DBHelper(constants.FUNFDB, '.')
         db.execute_db(create_sql, ())
