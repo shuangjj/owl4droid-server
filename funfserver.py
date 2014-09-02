@@ -92,7 +92,7 @@ def write_file(filename, file, feature_path):
     #? Extract data time and date from uploaded db
     conn = sqlite3.connect(tempdb)
     cur = conn.cursor()
-    cur.execute('SELECT * FROM data')
+    cur.execute('SELECT * FROM ' + constants.DATA_TABLE_NAME)
     rc = cur.fetchall()
     rec_num = len(rc)
     print "Record#: " + str(rec_num)
