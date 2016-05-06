@@ -2,6 +2,6 @@
 .pydevproject
 
 /uploads
-#/funfsens.db
+funfsens.db
 /backup
 *.swp

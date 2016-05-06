@@ -25,7 +25,8 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from SocketServer import ThreadingMixIn
 #TODO Setup path environment in script
 import sys
-sys.path.insert(0, '/home/shuang/workspace/funfsens/scripts-0.2.3/data_analyze')
+sys.path.insert(0, '/home/shuang/Workspace/funfsens/scripts-0.2.3/data_analyze')
+sys.path.insert(0, '/home/shuang/Workspace/funfsens/scripts-0.2.3/data_processlib')
 
 import cgi
 import urlparse
@@ -35,6 +36,7 @@ import time
 
 import sqlite3
 import urllib
+
 import constants
 import db_helper
 from features import FeatureRecord
